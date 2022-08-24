@@ -23,8 +23,10 @@ After working through that process, we'll dive into using Dockerfile to achieve 
 
 Open up a terminal window in our previous single node Cassandra Spring Boot project and run the following:
 
-``` shell
+``` text
 ./mvnw spring-boot:build-image
+```
+``` shell
 ...
 
 [INFO] Successfully built image 'docker.io/library/rest-service-complete:0.0.1-SNAPSHOT'
@@ -45,8 +47,10 @@ This same process can be done directly in IntelliJ by enabling this plugin in th
 
 You can now take a look at the local Docker images on your workstation, and see that these are now ready for your use
 
-``` shell
+``` text
 docker images
+```
+``` shell
 REPOSITORY                  TAG                    IMAGE ID       CREATED         SIZE
 ...
 rest-service-complete       0.0.1-SNAPSHOT         ceae6ec762be   42 years ago    245MB
@@ -59,26 +63,34 @@ migrated to Docker.
 
 Let's hardcode some new values for now in order to get this up and running quickly.
 
+``` text
+docker inspect --format '{{ .Name }} {{ .NetworkSettings.Networks.labnetwork.IPAddress }}' cassandra-lab
+```
 ``` shell
-docker inspect --format '{{ .Name }} {{ .NetworkSettings.Networks.bridge.IPAddress }}' cassandra-lab
 /cassandra-lab 172.17.0.2
 ```
 
 Update `application.properties`
 
 ``` text
+...
 spring.data.cassandra.contact-points=172.17.0.2:9042
+...
 ```
 
 Rebuild the application and image, and we can now see it running correctly from inside a container
 
-``` shell
-docker run --rm --name spring-boot-lab -d -p 8080:8080 rest-service-complete:0.0.1-SNAPSHOT
-
+``` text
+docker run --rm --name spring-boot-lab --network labnetwork -d -p 8080:8080 rest-service-complete:0.0.1-SNAPSHOT
 curl "http://localhost:8080/greeting"
+```
+``` shell
 {"id":1,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8080/persistent_greeting"
+```
+``` shell
 {"id":9,"content":"Hello, World!"}% 
 ```
 
@@ -91,25 +103,34 @@ E.g. we can override spring.data.cassandra.contact-points by passing into the co
 Let's test this out by reverting the connection string to localhost(127.0.0.1) again, and then running a container with the correct environmental variables
 specified.
 
-``` shell
+``` text
 # update connection to localhost and rebuild
-docker run --rm --name spring-boot-lab -p 8080:8080 rest-service-complete:0.0.1-SNAPSHOT
+docker run --rm --name spring-boot-lab --network labnetwork -p 8080:8080 rest-service-complete:0.0.1-SNAPSHOT
+
 # see container crash with connection errors
 
-docker run --rm --name spring-boot-lab -p 8080:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
+docker run --rm --name spring-boot-lab --network labnetwork -p 8080:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
+
 # see container persisting, and serving traffic correctly
+
+```
+``` text
 curl "http://localhost:8080/persistent_greeting"
+```
+``` shell
 {"id":10,"content":"Hello, World!"}%
 ```
 
 At this point, it is now easily possible to launch as many instances of the application as we want, all connecting to the same backend Database system.
 
 ``` shell
-docker run --rm --name spring-boot-lab-2 -d -p 8081:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
-docker run --rm --name spring-boot-lab-3 -d -p 8082:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
-docker run --rm --name spring-boot-lab-4 -d -p 8083:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
-docker run --rm --name spring-boot-lab-5 -d -p 8084:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
+docker run --rm --name spring-boot-lab-2 --network labnetwork -d -p 8081:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
+docker run --rm --name spring-boot-lab-3 --network labnetwork -d -p 8082:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
+docker run --rm --name spring-boot-lab-4 --network labnetwork -d -p 8083:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
+docker run --rm --name spring-boot-lab-5 --network labnetwork -d -p 8084:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" rest-service-complete:0.0.1-SNAPSHOT
 docker ps
+```
+``` shell
 CONTAINER ID   IMAGE                                  COMMAND                  CREATED          STATUS          PORTS                                                                          NAMES
 8591e3c8662d   rest-service-complete:0.0.1-SNAPSHOT   "/cnb/process/web"       3 seconds ago    Up 2 seconds    0.0.0.0:8084->8080/tcp, :::8084->8080/tcp                                      spring-boot-lab-5
 a765a276e7ed   rest-service-complete:0.0.1-SNAPSHOT   "/cnb/process/web"       13 seconds ago   Up 13 seconds   0.0.0.0:8083->8080/tcp, :::8083->8080/tcp                                      spring-boot-lab-4
@@ -117,34 +138,65 @@ a765a276e7ed   rest-service-complete:0.0.1-SNAPSHOT   "/cnb/process/web"       1
 f8fb16fdc9c6   rest-service-complete:0.0.1-SNAPSHOT   "/cnb/process/web"       29 seconds ago   Up 29 seconds   0.0.0.0:8081->8080/tcp, :::8081->8080/tcp                                      spring-boot-lab-2
 33b63f4e4c5d   rest-service-complete:0.0.1-SNAPSHOT   "/cnb/process/web"       37 minutes ago   Up 37 minutes   0.0.0.0:8080->8080/tcp, :::8080->8080/tcp                                      spring-boot-lab
 a03e783ff4fe   cassandra:4.0.4                        "docker-entrypoint.s…"   2 days ago       Up 7 hours      7000-7001/tcp, 7199/tcp, 9160/tcp, 0.0.0.0:9042->9042/tcp, :::9042->9042/tcp   cassandra-lab
+```
+``` text
 curl "http://localhost:8080/greeting"
+```
+``` shell
 {"id":1,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8081/greeting"
+```
+``` shell
 {"id":1,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8082/greeting"
+```
+``` shell
 {"id":1,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8083/greeting"
+```
+``` shell
 {"id":1,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8084/greeting"
+```
+``` shell
 {"id":1,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8080/persistent_greeting"
+```
+``` shell
 {"id":11,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8081/persistent_greeting"
+```
+``` shell
 {"id":12,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8082/persistent_greeting"
+```
+``` shell
 {"id":13,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8083/persistent_greeting"
+```
+``` shell
 {"id":14,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8084/persistent_greeting"
+```
+``` shell
 {"id":15,"content":"Hello, World!"}%
 ```
 
@@ -167,8 +219,10 @@ being used here.
 Once you've reviewed those, copy the Dockerfile into the project directory, to the same level as the `pom.xml` file.
 Then, run the following command from a terminal at that location:
 
-``` shell
+``` text
 docker build -t spring-boot-lab-build .
+```
+``` shell
 Sending build context to Docker daemon  33.43MB
 Step 1/19 : FROM eclipse-temurin:11-jdk as builder
 ...
@@ -178,8 +232,10 @@ Successfully tagged spring-boot-lab-build:latest
 
 If everything builds successfully, you should now see this image available for use on your workstation
 
-``` shell
+``` text
 docker images
+```
+``` shell
 REPOSITORY                  TAG                    IMAGE ID       CREATED              SIZE
 spring-boot-lab-build       latest                 4e75576a93d4   45 seconds ago       273MB
 ...
@@ -188,14 +244,62 @@ spring-boot-lab-build       latest                 4e75576a93d4   45 seconds ago
 
 You can launch an instance using this image, and see that it runs identically to what was built via the Maven plugin
 
-``` shell
-docker run --rm --name spring-boot-lab-6 -d -p 8085:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" spring-boot-lab-build
-
+``` text
+docker run --rm --name spring-boot-lab-6 --network labnetwork -d -p 8085:8080 -e SPRING_DATA_CASSANDRA_CONTACT_POINTS="172.17.0.2:9042" spring-boot-lab-build
 curl "http://localhost:8085/greeting"
+```
+``` shell
 {"id":1,"content":"Hello, World!"}%
-
+```
+``` text
 curl "http://localhost:8085/persistent_greeting"
+```
+``` shell
 {"id":16,"content":"Hello, World!"}%
+```
+
+## Testing
+
+The following command will run the tests to validate that this environment was setup correctly. A screenshot of the successful tests can be uploaded as a submission.
+
+``` text
+docker run --network labnetwork -it --rm -v /var/run/docker.sock:/var/run/docker.sock -v $(pwd)/test:/test inspec-lab exec docker.rb
+```
+``` shell
+...
+Profile:   tests from docker.rb (tests from docker.rb)
+Version:   (not specified)
+Target:    local://
+Target ID: 
+
+  ✔  Maven Image Build: Container image has been built via Maven
+     ✔  #<Inspec::Resources::DockerImageFilter:0x0000563d46595770> with repository == "rest-service-complete" tag == "0.0.1-SNAPSHOT" is expected to exist
+  ✔  Cassandra Running: Cassandra Docker instance is running
+     ✔  #<Inspec::Resources::DockerImageFilter:0x0000563d4500eb68> with repository == "cassandra" tag == "4.0.4" is expected to exist
+     ✔  #<Inspec::Resources::DockerContainerFilter:0x0000563d4511c280> with names == "cassandra-lab" image == "cassandra:4.0.4" status is expected to match [/Up/]
+     ✔  Cassandra query: SELECT cluster_name FROM system.local output is expected to match /Test Cluster/
+  ✔  Maven Container: Maven Spring Boot Container running
+     ✔  #<Inspec::Resources::DockerContainerFilter:0x0000563d46c6a000> with names == "spring-boot-lab" image == "rest-service-complete:0.0.1-SNAPSHOT" ports =~ /0.0.0.0:8080/ status is expected to match [/Up/]
+     ✔  HTTP GET on http://spring-boot-lab:8080/ status is expected to eq 404
+  ✔  Maven Container Replicas: Maven Spring Boot Container Replicas running
+     ✔  #<Inspec::Resources::DockerContainerFilter:0x0000563d43703f10> with names == "spring-boot-lab-2" image == "rest-service-complete:0.0.1-SNAPSHOT" ports =~ /0.0.0.0:8081/ status is expected to match [/Up/]
+     ✔  HTTP GET on http://spring-boot-lab-2:8080/ status is expected to eq 404
+     ✔  #<Inspec::Resources::DockerContainerFilter:0x0000563d467f3288> with names == "spring-boot-lab-3" image == "rest-service-complete:0.0.1-SNAPSHOT" ports =~ /0.0.0.0:8082/ status is expected to match [/Up/]
+     ✔  HTTP GET on http://spring-boot-lab-3:8080/ status is expected to eq 404
+     ✔  #<Inspec::Resources::DockerContainerFilter:0x0000563d4675b460> with names == "spring-boot-lab-4" image == "rest-service-complete:0.0.1-SNAPSHOT" ports =~ /0.0.0.0:8083/ status is expected to match [/Up/]
+     ✔  HTTP GET on http://spring-boot-lab-4:8080/ status is expected to eq 404
+     ✔  #<Inspec::Resources::DockerContainerFilter:0x0000563d44f70300> with names == "spring-boot-lab-5" image == "rest-service-complete:0.0.1-SNAPSHOT" ports =~ /0.0.0.0:8084/ status is expected to match [/Up/]
+     ✔  HTTP GET on http://spring-boot-lab-5:8080/ status is expected to eq 404
+  ✔  Dockerfile Image Build: Container image has been built via Dockerfile
+     ✔  #<Inspec::Resources::DockerImageFilter:0x0000563d45114a30> with repository == "spring-boot-lab-build" tag == "latest" is expected to exist
+     ✔  #<Inspec::Resources::DockerImageFilter:0x0000563d46c3fcb0> with repository == "eclipse-temurin" tag == "11-jre" is expected to exist
+  ✔  Dockerfile Build Container: Custom Dockerfile Container running
+     ✔  #<Inspec::Resources::DockerContainerFilter:0x0000563d45009ac8> with names == "spring-boot-lab-6" image == "spring-boot-lab-build" ports =~ /0.0.0.0:8085/ status is expected to match [/Up/]
+     ✔  HTTP GET on http://spring-boot-lab-6:8080/ status is expected to eq 404
+
+
+Profile Summary: 6 successful controls, 0 control failures, 0 controls skipped
+Test Summary: 18 successful, 0 failures, 0 skipped
 ```
 
 ## Advanced Lab
